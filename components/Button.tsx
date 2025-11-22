@@ -3,6 +3,7 @@ import React from 'react';
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'outline' | 'glass';
   size?: 'sm' | 'md' | 'lg';
+  noSound?: boolean;
 }
 
 export const Button: React.FC<ButtonProps> = ({ 
@@ -10,10 +11,12 @@ export const Button: React.FC<ButtonProps> = ({
   className = '', 
   variant = 'primary', 
   size = 'md', 
+  noSound = false,
+  onClick,
   ...props 
 }) => {
   
-  const baseStyles = "font-bold rounded-2xl transform transition-all duration-200 active:scale-95 shadow-[0_6px_0_0_rgba(0,0,0,0.15)] active:shadow-none active:translate-y-[6px] flex items-center justify-center gap-2 relative overflow-hidden";
+  const baseStyles = "font-bold rounded-2xl transform transition-all duration-200 active:scale-95 shadow-[0_6px_0_0_rgba(0,0,0,0.15)] active:shadow-none active:translate-y-[6px] flex items-center justify-center gap-2 relative overflow-hidden select-none";
   
   const variants = {
     primary: "bg-gradient-to-b from-blue-400 to-blue-500 text-white border-b-4 border-blue-700 hover:brightness-110",
@@ -30,9 +33,43 @@ export const Button: React.FC<ButtonProps> = ({
     lg: "text-2xl py-5 px-10 w-full"
   };
 
+  const playPopSound = () => {
+    if (noSound) return;
+    try {
+      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+      if (!AudioContext) return;
+      
+      const ctx = new AudioContext();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      // Cute pop sound
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(300, ctx.currentTime + 0.1);
+      
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
+      
+      osc.start();
+      osc.stop(ctx.currentTime + 0.1);
+    } catch (e) {
+      // Ignore audio errors
+    }
+  };
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    playPopSound();
+    onClick?.(e);
+  };
+
   return (
     <button 
       className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className}`}
+      onClick={handleClick}
       {...props}
     >
       {/* Shine effect */}

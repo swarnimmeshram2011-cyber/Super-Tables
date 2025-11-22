@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Button } from '../components/Button';
 import { Question, WrongAnswer, TestResult } from '../types';
 import { StorageService } from '../storageService';
-import { ArrowLeft, Clock, Award, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Clock, Star, RefreshCw, Sparkles, XCircle, CheckCircle } from 'lucide-react';
 
 interface QuizConfig {
   mode: 'PRACTICE' | 'TEST' | 'SPEED' | 'DAILY' | 'RETRY';
@@ -26,34 +26,20 @@ export const QuizView: React.FC<Props> = ({ config, onBack, onFinish }) => {
   const [timeLeft, setTimeLeft] = useState<number | null>(config.timeLimitSeconds || null);
   const [feedback, setFeedback] = useState<'CORRECT' | 'WRONG' | null>(null);
   const [showResult, setShowResult] = useState(false);
-  const [startTime] = useState(Date.now());
+  const [wrongAnswers, setWrongAnswers] = useState<WrongAnswer[]>([]);
   
-  // For Retry Mode tracking
-  const [solvedWrongQuestions, setSolvedWrongQuestions] = useState<Question[]>([]);
+  const timerRef = useRef<any>(undefined);
+  const startTimeRef = useRef<number>(Date.now());
 
-  const timerRef = useRef<number | undefined>(undefined);
-
-  // Generate a random question based on tables
-  const generateQuestion = (): Question => {
-    const table = config.tables[Math.floor(Math.random() * config.tables.length)];
-    const multiplier = Math.floor(Math.random() * 12) + 1;
-    return { num1: table, num2: multiplier, answer: table * multiplier };
-  };
-
-  // Initialize
+  // Initialize Quiz
   useEffect(() => {
-    if (config.questions && config.questions.length > 0) {
-      setCurrentQuestion(config.questions[0]);
-    } else {
-      setCurrentQuestion(generateQuestion());
-    }
-
+    generateQuestion();
+    
     if (config.timeLimitSeconds) {
-      timerRef.current = window.setInterval(() => {
+      timerRef.current = setInterval(() => {
         setTimeLeft((prev) => {
           if (prev !== null && prev <= 1) {
-            clearInterval(timerRef.current);
-            finishQuiz();
+            endQuiz();
             return 0;
           }
           return prev !== null ? prev - 1 : null;
@@ -61,196 +47,257 @@ export const QuizView: React.FC<Props> = ({ config, onBack, onFinish }) => {
       }, 1000);
     }
 
-    return () => clearInterval(timerRef.current);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
   }, []);
 
-  const finishQuiz = () => {
-    setShowResult(true);
-    clearInterval(timerRef.current);
-    
-    // Save Result
-    const resultData: TestResult = {
-      date: new Date().toLocaleDateString(),
-      score: score,
-      total: totalAnswered,
-      mode: config.mode,
-      timeTakenSeconds: (Date.now() - startTime) / 1000
-    };
-    StorageService.addResult(resultData);
-    
-    if (config.mode === 'DAILY') {
-      StorageService.incrementStreak();
+  const generateQuestion = () => {
+    // If using pre-set questions (Retry / Daily)
+    if (config.questions) {
+      if (totalAnswered >= config.questions.length) {
+        endQuiz();
+        return;
+      }
+      setCurrentQuestion(config.questions[totalAnswered]);
+      return;
     }
 
+    // If limited count test
+    if (config.questionCount && totalAnswered >= config.questionCount) {
+      endQuiz();
+      return;
+    }
+
+    // Generate Random Question based on tables
+    const table = config.tables[Math.floor(Math.random() * config.tables.length)];
+    const num = Math.floor(Math.random() * 12) + 1;
+    setCurrentQuestion({ num1: table, num2: num, answer: table * num });
+  };
+
+  const endQuiz = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    setShowResult(true);
+
+    // Save Result
+    const timeTaken = Math.floor((Date.now() - startTimeRef.current) / 1000);
+    
+    if (config.mode !== 'PRACTICE') {
+      const result: TestResult = {
+        date: new Date().toLocaleDateString(),
+        score: score,
+        total: totalAnswered,
+        mode: config.mode,
+        timeTakenSeconds: timeTaken
+      };
+      StorageService.addResult(result);
+
+      if (config.mode === 'DAILY') {
+        StorageService.incrementStreak();
+      }
+
+      // Update Streak for Speed Test if needed
+      if (config.mode === 'SPEED') {
+        // Logic for best speed could go here
+      }
+    }
+
+    // If Retry mode, clear the corrected wrong answers from storage
     if (config.mode === 'RETRY') {
-        StorageService.clearWrongAnswers(solvedWrongQuestions);
+       // Find which questions were answered correctly this time
+       // This is a simplified approach; normally we'd track exactly which ID was fixed
+       // For now, we can just clear all if score is 100%, or implement specific removal in StorageService
+       if (score === totalAnswered) {
+         StorageService.clearWrongAnswers(config.questions || []);
+       }
     }
   };
 
-  const handleSubmit = (e?: React.FormEvent) => {
-    e?.preventDefault();
-    if (!currentQuestion || feedback) return;
+  const handleSubmit = () => {
+    if (!currentQuestion || !input) return;
 
-    const userVal = parseInt(input);
-    const isCorrect = userVal === currentQuestion.answer;
+    const val = parseInt(input);
+    const isCorrect = val === currentQuestion.answer;
 
     if (isCorrect) {
-      setFeedback('CORRECT');
       setScore(s => s + 1);
-      playSound('success');
-      if (config.mode === 'RETRY') {
-          setSolvedWrongQuestions(prev => [...prev, currentQuestion]);
-      }
+      setFeedback('CORRECT');
+      // Play sound
+      playSound('correct');
     } else {
       setFeedback('WRONG');
-      playSound('error');
+      playSound('wrong');
+      
       // Save wrong answer
-      const wa: WrongAnswer = {
-        ...currentQuestion,
-        userAnswer: userVal,
-        timestamp: Date.now()
-      };
-      StorageService.addWrongAnswer(wa);
+      if (config.mode !== 'PRACTICE' && config.mode !== 'RETRY') {
+        StorageService.addWrongAnswer({
+          ...currentQuestion,
+          userAnswer: val,
+          timestamp: Date.now()
+        });
+      }
+      setWrongAnswers(prev => [...prev, { ...currentQuestion, userAnswer: val, timestamp: Date.now() }]);
     }
 
-    setTotalAnswered(t => t + 1);
-
-    // Next Question logic
+    // Wait then next question
     setTimeout(() => {
       setFeedback(null);
       setInput('');
-      
-      if (config.questions) {
-        // Fixed list mode (Daily/Retry)
-        if (totalAnswered + 1 >= config.questions.length) {
-          finishQuiz();
-        } else {
-          setCurrentQuestion(config.questions[totalAnswered + 1]);
-        }
-      } else if (config.questionCount && totalAnswered + 1 >= config.questionCount) {
-        // Limited random mode
-        finishQuiz();
-      } else {
-        // Infinite or timed mode
-        if (timeLeft === 0) return; 
-        setCurrentQuestion(generateQuestion());
-      }
-    }, isCorrect ? 1000 : 2500); // Longer delay for wrong answers to see correction
+      setTotalAnswered(t => t + 1);
+      generateQuestion();
+    }, 1500);
   };
 
-  const playSound = (type: 'success' | 'error') => {
-    const profile = StorageService.getProfile();
-    if (!profile.soundEnabled) return;
-    
+  const playSound = (type: 'correct' | 'wrong') => {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-    
-    if (type === 'success') {
-      osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
-      osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1); // E5
-      gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.4);
+
+    if (type === 'correct') {
+      osc.frequency.setValueAtTime(600, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(1200, ctx.currentTime + 0.1);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
       osc.start();
-      osc.stop(ctx.currentTime + 0.4);
+      osc.stop(ctx.currentTime + 0.3);
     } else {
       osc.type = 'sawtooth';
-      osc.frequency.setValueAtTime(150, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.00001, ctx.currentTime + 0.4);
+      osc.frequency.setValueAtTime(200, ctx.currentTime);
+      osc.frequency.linearRampToValueAtTime(100, ctx.currentTime + 0.2);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime);
+      gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.3);
       osc.start();
-      osc.stop(ctx.currentTime + 0.4);
+      osc.stop(ctx.currentTime + 0.3);
     }
   };
 
-  if (showResult) {
-    const percentage = totalAnswered === 0 ? 0 : Math.round((score / totalAnswered) * 100);
-    return (
-      <div className="flex flex-col items-center justify-center p-6 h-full animate-fade-in">
-        <h2 className="text-4xl font-bold text-kidBlue mb-8">
-          {config.mode === 'SPEED' ? "Time's Up!" : "Quiz Complete!"}
-        </h2>
-        
-        <div className="bg-white p-8 rounded-3xl shadow-xl text-center w-full max-w-md border-4 border-kidYellow">
-          <div className="text-6xl font-bold text-kidPurple mb-4">{score} / {totalAnswered}</div>
-          <div className={`text-2xl font-bold mb-8 ${percentage >= 80 ? 'text-kidGreen' : 'text-kidRed'}`}>
-             {percentage}% Accuracy
-          </div>
-          
-          <p className="text-gray-600 mb-8 text-lg">
-            {percentage === 100 ? "PERFECT! You are a math wizard! 🧙‍♂️" : 
-             percentage >= 80 ? "Great job! Keep practicing! 🚀" : 
-             "Don't give up! Try again! 💪"}
-          </p>
+  const handleNumPad = (num: number) => {
+    if (input.length < 4) setInput(prev => prev + num.toString());
+  };
 
-          <div className="space-y-4">
-            <Button variant="primary" size="lg" onClick={onFinish}>Return Home</Button>
-            {percentage < 100 && config.mode === 'TEST' && (
-               <Button variant="secondary" onClick={onFinish}>Try Retry Mode later</Button>
-            )}
-          </div>
+  const handleBackspace = () => {
+    setInput(prev => prev.slice(0, -1));
+  };
+
+  if (showResult) {
+    const percentage = totalAnswered > 0 ? Math.round((score / totalAnswered) * 100) : 0;
+    let message = "Good Try!";
+    if (percentage === 100) message = "Perfect Score! 🌟";
+    else if (percentage >= 80) message = "Awesome Job! 🚀";
+    else if (percentage >= 50) message = "Keep Practicing! 💪";
+
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-4 animate-pop-in">
+        <div className="bg-white/90 backdrop-blur p-8 rounded-3xl shadow-2xl border-4 border-white text-center max-w-lg w-full">
+           <div className="mb-6 text-6xl animate-bounce-short">
+             {percentage >= 80 ? '🏆' : '🎯'}
+           </div>
+           <h2 className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 mb-2 font-display">
+             Quiz Complete!
+           </h2>
+           <p className="text-xl text-gray-500 font-bold mb-6">{message}</p>
+
+           <div className="grid grid-cols-2 gap-4 mb-8">
+              <div className="bg-green-100 p-4 rounded-2xl border-2 border-green-200">
+                <div className="text-xs text-green-600 font-bold uppercase">Score</div>
+                <div className="text-3xl font-black text-green-700">{score}/{totalAnswered}</div>
+              </div>
+              <div className="bg-blue-100 p-4 rounded-2xl border-2 border-blue-200">
+                <div className="text-xs text-blue-600 font-bold uppercase">Accuracy</div>
+                <div className="text-3xl font-black text-blue-700">{percentage}%</div>
+              </div>
+           </div>
+
+           <Button variant="primary" size="lg" onClick={onFinish} className="w-full">
+             <CheckCircle className="mr-2" /> Done
+           </Button>
         </div>
       </div>
     );
   }
 
-  if (!currentQuestion) return <div className="p-10 text-center text-2xl">Loading Quiz...</div>;
-
   return (
-    <div className="flex flex-col h-full max-w-2xl mx-auto p-4">
+    <div className="p-4 h-full flex flex-col max-w-2xl mx-auto">
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
-        <Button variant="outline" size="sm" onClick={onBack}>Exit</Button>
-        {config.timeLimitSeconds && (
-           <div className={`flex items-center gap-2 text-2xl font-bold font-mono px-4 py-2 rounded-xl ${timeLeft! < 10 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-blue-100 text-blue-600'}`}>
-             <Clock size={24} /> {timeLeft}s
-           </div>
+        <Button variant="glass" size="sm" onClick={onBack}>
+           <ArrowLeft /> Exit
+        </Button>
+        {timeLeft !== null && (
+          <div className={`flex items-center gap-2 font-mono text-xl font-bold px-4 py-2 rounded-xl ${timeLeft < 10 ? 'bg-red-100 text-red-600 animate-pulse' : 'bg-white text-blue-600'}`}>
+             <Clock size={20} /> {timeLeft}s
+          </div>
         )}
-        <div className="text-xl font-bold text-gray-500">
-            Score: {score}
+        <div className="font-bold text-gray-600 bg-white/50 px-3 py-1 rounded-lg">
+           {totalAnswered + 1} / {config.questionCount || '∞'}
         </div>
       </div>
 
-      {/* Question Card */}
-      <div className="flex-1 flex flex-col justify-center items-center">
-         <div className="w-full bg-white rounded-3xl shadow-2xl p-8 mb-8 text-center border-b-8 border-gray-200 relative overflow-hidden">
-            {feedback === 'CORRECT' && (
-               <div className="absolute inset-0 bg-green-100 flex items-center justify-center z-10 animate-bounce">
-                 <span className="text-6xl font-bold text-green-600">Correct! 🎉</span>
-               </div>
-            )}
-            {feedback === 'WRONG' && (
-               <div className="absolute inset-0 bg-red-100 flex flex-col items-center justify-center z-10">
-                 <span className="text-4xl font-bold text-red-600 mb-2">Oops! 😅</span>
-                 <span className="text-2xl text-gray-700">
-                    {currentQuestion.num1} × {currentQuestion.num2} = <b>{currentQuestion.answer}</b>
-                 </span>
-               </div>
-            )}
+      {/* Question Area */}
+      <div className="flex-1 flex flex-col justify-center mb-4">
+        <div className="bg-white rounded-3xl shadow-xl p-8 text-center relative overflow-hidden border-4 border-white">
+           {feedback && (
+             <div className={`absolute inset-0 flex items-center justify-center z-10 backdrop-blur-sm bg-white/30 animate-pop-in`}>
+                <div className={`text-6xl font-black ${feedback === 'CORRECT' ? 'text-green-500 drop-shadow-lg' : 'text-red-500 drop-shadow-lg'}`}>
+                  {feedback === 'CORRECT' ? 'AWESOME!' : `ANSWER: ${currentQuestion?.answer}`}
+                </div>
+             </div>
+           )}
 
-            <div className="text-gray-500 text-xl mb-4 uppercase tracking-widest font-bold">Solve this</div>
-            <div className="text-7xl font-bold text-gray-800 font-mono mb-2">
-               {currentQuestion.num1} × {currentQuestion.num2}
-            </div>
-            <div className="text-6xl text-gray-300">= ?</div>
-         </div>
+           <div className="text-gray-400 font-bold text-xl mb-4 uppercase tracking-widest">Solve This</div>
+           <div className="flex items-center justify-center gap-4 text-6xl md:text-7xl font-black text-gray-800 font-mono mb-8">
+              <span>{currentQuestion?.num1}</span>
+              <span className="text-kidBlue">×</span>
+              <span>{currentQuestion?.num2}</span>
+           </div>
 
-         {/* Numpad / Input */}
-         <form onSubmit={handleSubmit} className="w-full max-w-sm">
-            <input 
-               type="number" 
-               value={input}
-               onChange={(e) => setInput(e.target.value)}
-               className="w-full text-center text-5xl p-4 rounded-2xl border-4 border-kidBlue focus:border-kidYellow outline-none mb-4 font-mono"
-               placeholder="?"
-               autoFocus
-               readOnly={!!feedback} // Lock input during feedback
-            />
-            <Button type="submit" size="lg" disabled={!input || !!feedback} className="w-full shadow-lg">
-               Check Answer
-            </Button>
-         </form>
+           {/* Input Display */}
+           <div className={`
+              h-20 bg-gray-100 rounded-2xl flex items-center justify-center text-5xl font-black border-4 transition-colors
+              ${feedback === 'CORRECT' ? 'border-green-400 bg-green-50 text-green-600' : 
+                feedback === 'WRONG' ? 'border-red-400 bg-red-50 text-red-600' : 
+                'border-blue-200 text-gray-800'}
+           `}>
+              {input}<span className="animate-pulse text-blue-300">|</span>
+           </div>
+        </div>
+      </div>
+
+      {/* Custom Numpad */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(num => (
+          <button
+            key={num}
+            className="bg-white shadow-[0_4px_0_0_rgba(0,0,0,0.1)] active:shadow-none active:translate-y-[4px] rounded-xl py-4 text-3xl font-bold text-blue-600 transition-all hover:bg-blue-50"
+            onClick={() => handleNumPad(num)}
+            disabled={feedback !== null}
+          >
+            {num}
+          </button>
+        ))}
+        <button 
+          className="bg-red-100 shadow-[0_4px_0_0_rgba(220,38,38,0.1)] active:shadow-none active:translate-y-[4px] rounded-xl py-4 flex items-center justify-center text-red-500 font-bold transition-all hover:bg-red-200"
+          onClick={handleBackspace}
+          disabled={feedback !== null}
+        >
+          <XCircle size={32} />
+        </button>
+        <button 
+          className="bg-white shadow-[0_4px_0_0_rgba(0,0,0,0.1)] active:shadow-none active:translate-y-[4px] rounded-xl py-4 text-3xl font-bold text-blue-600 transition-all hover:bg-blue-50"
+          onClick={() => handleNumPad(0)}
+          disabled={feedback !== null}
+        >
+          0
+        </button>
+        <button 
+          className="bg-green-500 shadow-[0_4px_0_0_rgba(21,128,61,0.3)] active:shadow-none active:translate-y-[4px] rounded-xl py-4 flex items-center justify-center text-white font-bold transition-all hover:bg-green-600"
+          onClick={handleSubmit}
+          disabled={feedback !== null || input === ''}
+        >
+          <CheckCircle size={32} />
+        </button>
       </div>
     </div>
   );

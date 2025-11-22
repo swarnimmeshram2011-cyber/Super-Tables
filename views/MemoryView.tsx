@@ -152,23 +152,20 @@ export const MemoryView: React.FC<Props> = ({ onBack }) => {
                   w-full h-full relative preserve-3d transition-transform duration-500 cursor-pointer
                   ${card.isFlipped || card.isMatched ? 'rotate-y-180' : ''}
                 `}
-                style={{ transformStyle: 'preserve-3d', transform: (card.isFlipped || card.isMatched) ? 'rotateY(180deg)' : 'rotateY(0)' }}
               >
-                {/* Back of Card */}
+                {/* Back of Card (Question Mark) */}
                 <div 
                   className="absolute w-full h-full backface-hidden bg-gradient-to-br from-blue-400 to-blue-600 rounded-xl shadow-md border-2 border-blue-300 flex items-center justify-center"
-                  style={{ backfaceVisibility: 'hidden' }}
                 >
                    <span className="text-4xl opacity-50">❓</span>
                 </div>
 
-                {/* Front of Card */}
+                {/* Front of Card (Content) */}
                 <div 
                   className={`
-                    absolute w-full h-full backface-hidden rounded-xl shadow-xl flex items-center justify-center border-4
+                    absolute w-full h-full backface-hidden rounded-xl shadow-xl flex items-center justify-center border-4 rotate-y-180
                     ${card.isMatched ? 'bg-green-100 border-green-400' : 'bg-white border-yellow-400'}
                   `}
-                  style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
                 >
                    <span className={`font-black ${card.type === 'EQUATION' ? 'text-xl md:text-3xl text-gray-700' : 'text-3xl md:text-5xl text-blue-600'}`}>
                      {card.content}
