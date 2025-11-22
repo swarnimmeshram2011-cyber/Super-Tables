@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="https://picsum.photos/32/32" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#4F46E5" />
+    <title>Super Tables Web</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              kidBlue: '#4facfe',
+              kidBlueDark: '#00f2fe',
+              kidYellow: '#f6d365',
+              kidOrange: '#fda085',
+              kidGreen: '#84fab0',
+              kidRed: '#ff9a9e',
+              kidPurple: '#a18cd1',
+              kidPink: '#fbc2eb',
+              kidPaper: '#fdfbf7',
+            },
+            fontFamily: {
+              sans: ['Comic Sans MS', 'Chalkboard SE', 'Bubblegum Sans', 'sans-serif'],
+              display: ['Fredoka One', 'cursive'],
+            },
+            animation: {
+              'bounce-short': 'bounce-short 0.5s ease-in-out 1',
+              'pop-in': 'popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+              'float': 'float 6s ease-in-out infinite',
+              'wiggle': 'wiggle 1s ease-in-out infinite',
+            },
+            keyframes: {
+              'bounce-short': {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-5px)' },
+              },
+              popIn: {
+                '0%': { opacity: '0', transform: 'scale(0.5)' },
+                '100%': { opacity: '1', transform: 'scale(1)' },
+              },
+              float: {
+                '0%, 100%': { transform: 'translateY(0)' },
+                '50%': { transform: 'translateY(-10px)' },
+              },
+              wiggle: {
+                '0%, 100%': { transform: 'rotate(-3deg)' },
+                '50%': { transform: 'rotate(3deg)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* Custom scrollbar for kids app */
+      ::-webkit-scrollbar {
+        width: 12px;
+      }
+      ::-webkit-scrollbar-track {
+        background: rgba(255, 255, 255, 0.5); 
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #a18cd1; 
+        border-radius: 6px;
+        border: 2px solid white;
+      }
+      ::-webkit-scrollbar-thumb:hover {
+        background: #8B5CF6; 
+      }
+
+      /* Fun background pattern */
+      .fun-pattern {
+        background-color: #e0f2fe;
+        background-image: radial-gradient(#4facfe 2px, transparent 2px), radial-gradient(#f6d365 2px, transparent 2px);
+        background-size: 40px 40px;
+        background-position: 0 0, 20px 20px;
+        min-height: 100vh;
+      }
+      
+      .dark .fun-pattern {
+        background-color: #0f172a;
+        background-image: radial-gradient(#1e293b 2px, transparent 2px), radial-gradient(#334155 2px, transparent 2px);
+      }
+
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(10px);
+        border: 4px solid white;
+      }
+      
+      /* Print styles for certificates */
+      @media print {
+        body * {
+          visibility: hidden;
+        }
+        #certificate-area, #certificate-area * {
+          visibility: visible;
+        }
+        #certificate-area {
+          position: absolute;
+          left: 0;
+          top: 0;
+          width: 100%;
+          height: 100%;
+          margin: 0;
+          padding: 0;
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          background: white;
+        }
+        .no-print {
+          display: none !important;
+        }
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0"
+  }
+}
+</script>
+</head>
+  <body class="fun-pattern transition-colors duration-300 selection:bg-kidYellow selection:text-black">
+    <div id="root"></div>
+  </body>
+</html>
